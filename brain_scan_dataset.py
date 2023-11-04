@@ -20,7 +20,7 @@ class BrainScanDataset(utils.Dataset):
         assert subset in ["train", "val", 'test']
         dataset_dir = os.path.join(dataset_dir, subset)
 
-        annotations = json.load(open(os.path.join(DATASET_DIR, subset, 'annotations_'+subset+'.json')))
+        annotations = json.load(open(os.path.join(dataset_dir, 'annotations_'+subset+'.json')))
         annotations = list(annotations.values())  # don't need the dict keys
 
         # The VIA tool saves images in the JSON even if they don't have any
@@ -78,7 +78,7 @@ class BrainScanDataset(utils.Dataset):
 
         # Return mask, and array of class IDs of each instance. Since we have
         # one class ID only, we return an array of 1s
-        return mask.astype(np.bool), np.ones([mask.shape[-1]], dtype=np.int32)
+        return mask.astype(bool), np.ones([mask.shape[-1]], dtype=np.int32)
 
     def image_reference(self, image_id):
         """Return the path of the image."""
