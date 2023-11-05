@@ -1,13 +1,12 @@
 # controller.py
 
 from view import ImageView
-from model import ImageModel,PatientModel
+from model import ImageModel, PatientModel
 import tkinter as tk
 from tkinter import filedialog
 import os
 import mysql.connector
-
-
+from datetime import datetime
 
 class ImageController:
     def __init__(self, root):
@@ -18,7 +17,6 @@ class ImageController:
         - root (Tk): The Tkinter root window.
         """
         self.root = root
-        
 
         # Model
         self.image_model = ImageModel()
@@ -27,6 +25,32 @@ class ImageController:
         # View
         self.view = ImageView(root, self)
 
+        # Attributes
+        self.selected_patient_id = None
+        self.uploaded_image_path = None
+        
+        self.draw_rectangle()
+        
+        
+        
+    def draw_rectangle(self):
+        # Get the canvas from the view
+        
+            canvas1 = self.view.canvas
+
+        # Coordinates of the rectangle (x1, y1, x2, y2)
+            rectangle_coords = 300, 200, 700, 600
+
+        # Draw the rectangle on the canvas
+            canvas1.create_rectangle(rectangle_coords, outline="black", width=2, fill="lightblue")    
+
+
+    def get_comments(self):
+        # Get comments from the Entry widget
+        comments = self.view.comments_entry.get()
+        return comments
+    
+    # Image Handling
     def upload_picture(self):
         """
         Handles the process of uploading a picture.
@@ -54,7 +78,7 @@ class ImageController:
                 break
             else:
                 print("Unsupported file type. Please select a PNG, JPG, or JPEG file.")
-
+                
     def is_supported_file(self, file_path):
         """
         Checks if the given file is of a supported type.
@@ -68,23 +92,17 @@ class ImageController:
         # Check if the file extension is supported
         file_name, file_extension = os.path.splitext(file_path.lower())
         return file_extension in {'.png', '.jpg', '.jpeg'}
-
+    
     def application_supports_secure_restorable_state(self):
         """
         Addresses the warning about missing method.
-        
+
         Returns:
         - bool: True indicating that the application supports secure restorable state.
         """
         return True
 
-
-
-    def application_supports_secure_restorable_state(self):
-        return True
-
-##############  LIST OF NAME FROM SQL TABLES #################################
-
+    # Names and User Details
     def update_name_list(self):
         # Connect to the model to get names
         names = self.patient_model.get_names_from_database()
@@ -99,39 +117,129 @@ class ImageController:
         # Update the details in the view
         self.view.show_user_details(user_details)
         
+        self.selected_patient_id = patient_id
 
-   
-    
-    
-######## RETRIEVING AND DISPLAYING PATIENT INFO IN GUI##############
+    # Retrieving and Displaying Patient Info in GUI
+    def add_log(self, patient_id, text, image_path):
+        # Get the current date and time
+        date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    # def get_user_details(self,patient_id):
+        # Call the model method to insert a log
+        self.patient_model.insert_patient_log(patient_id, date, text, image_path)
+                
+        # Update the view to reflect the changes
+        logs = self.get_logs_for_selected_patient()
+
+        self.view.update_logs_list(logs, self.get_selected_patient_id())
+
+
+    
+
+    # Image for Log Handling
+    def upload_image_for_log(self):
+        # Similar to upload_picture method for selecting images
+        file_path = filedialog.askopenfilename(title="Select Image for Log")
+
+        # Check if a file is selected
+        if not file_path:
+            print("No file selected. Exiting.")
+            return
+
+        # Check if the file is a supported type
+        if self.is_supported_file(file_path):
+            self.uploaded_image_path = file_path
+            print("Image uploaded for log:", file_path)
+        else:
+            print("Unsupported file type. Please select a PNG, JPG, or JPEG file.")
+
+    def add_log_to_patient(self, log_text):
+        # Get the uploaded image path from the controller
+        image_path = self.uploaded_image_path
+
+        # Call the controller method to add a log with text and image
+        self.add_log(self.selected_patient_id, log_text, image_path)
+
+        # Clear the uploaded image path after adding the log
+        self.uploaded_image_path = None
+
+        # Update the logs list in the view
+        self.update_logs_list()
+
+
+    def update_logs_list(self):
+        # Update the logs list in the view
+        logs = self.get_logs_for_selected_patient()
+        self.view.update_logs_list(logs)
         
-    #     conn = mysql.connector.connect(
-    #         host="127.0.0.1",
-    #         user="root",
-    #         password="Telefon2001",
-    #         database="myDB"
-    #     )
-
-    #     cursor = conn.cursor(dictionary=True)
-    
-    #     # Use a parameterized query to avoid SQL injection
-    #     query = 'SELECT name, age, gender FROM patient_profiles WHERE id = %s'
-    #     cursor.execute(query, (patient_id,))
         
-    #     # Fetch the user details
-    #     user_details = cursor.fetchone()
+    def get_selected_patient_id(self):
+        # Get the selected index from the names listbox
+        selected_index = self.view.names_listbox.curselection()
 
-    #     # Close the connection
-    #     conn.close()
+        if selected_index:
+            # Get the selected patient's name
+            selected_name = self.view.names_listbox.get(selected_index)
 
-    #     # Return the user details
-    #     return user_details
+            # Retrieve the patient ID from the model using the selected name
+            patient_id = self.patient_model.get_patient_id_by_name(selected_name)
+            return patient_id
+
+        return None
+         
+    def get_logs_for_selected_patient(self):
         
+        patient_id = self.get_selected_patient_id()
+        
+        if patient_id:
+            logs = self.patient_model.get_logs_for_patient(patient_id)
+            return logs
+        
+        return logs
+    
+    def get_logs_for_patient(self,patient_id):
+        # Establish a connection to the database
+        conn = mysql.connector.connect(**self.db_params)
+
+        # Create a cursor to execute SQL queries
+        cursor = conn.cursor(dictionary=True)
+
+        # Use a parameterized query to avoid SQL injection
+        query = 'SELECT date, text, image_path FROM patient_logs WHERE patient_id = %s ORDER BY date DESC'
+        cursor.execute(query, (patient_id,))
+
+        # Fetch the logs for the patient
+        logs = cursor.fetchall()
+
+        # Close the database connection
+        conn.close()
+
+        # Return the logs
+        return logs
+
+            
+    def get_uploaded_image_path(self):
+        return self.uploaded_image_path
+    
+    def check_logs_for_selected_patient(self):
+        # Get the selected patient's ID
+        patient_id = self.get_selected_patient_id()
+
+        if patient_id:
+            # Retrieve logs for the selected patient
+            logs = self.patient_model.get_logs_for_patient(patient_id)
+
+            # Process the logs (you can modify this based on your requirements)
+            for log in logs:
+                print(f"Date: {log['date']}, Text: {log['text']}, Image Path: {log['image_path']}")
+
+            # Update the logs list in the view
+            self.view.update_logs_list(logs, patient_id)
+    
+    def brain_tumour_detector(self):
+        pass
         
     
-    
+
 # Main program
 if __name__ == "__main__":
     root = tk.Tk()
